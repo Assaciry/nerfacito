@@ -49,17 +49,15 @@ class Voxels(nn.Module):
         
         
 
-def initialize_rays(H,W, device="cpu"):
-    f = 1200
-
+def initialize_rays(H,W,fx, fy, device="cpu"):
     u,v = np.arange(W), np.arange(H)
     u,v = np.meshgrid(u,v)
 
     rays_o = np.zeros((H*W, 3))
     rays_d = np.stack((
-        (u - W/2),
-        -(v - H/2),
-        -f * np.ones_like(u)
+        (u - W/2)   /fx,
+        -(v - H/2) / fy,
+        -np.ones_like(u)
     ), axis=-1)
 
     rays_d = rays_d / np.linalg.norm(rays_d, axis=-1, keepdims=True)
@@ -109,23 +107,39 @@ def euler_to_rotation_matrix(ypr):
     R_ned = Rotation.from_euler("ZYX", ypr, degrees=True)
     return R_ned.as_matrix()
 
+# def create_homogeneous_matrix(rotation_matrix, translation_vector=None):
+#     if len(rotation_matrix.shape) == 2:
+#         rotation_matrix = rotation_matrix[None,...]
+        
+#     # Concat R and t
+#     if translation_vector is None:
+#         if rotation_matrix.shape[0] == 1:
+#             translation_vector = np.zeros((1,3))
+#         else:
+#             translation_vector = np.zeros((rotation_matrix.shape[0],1,3))
+#     else:
+#         if len(translation_vector.shape) == 1:
+#               translation_vector = translation_vector[...,None]
+#     H1  = np.concatenate((rotation_matrix, translation_vector[...,None]),axis=-1)
+#     # Put in 4x4 HTM Format
+#     H1  = np.concatenate((H1,np.zeros((H1.shape[0],1,4))),axis=1)
+#     H1[:,3,3] += 1
+    
+#     return H1
+    
 def create_homogeneous_matrix(rotation_matrix, translation_vector=None):
     if len(rotation_matrix.shape) == 2:
-        rotation_matrix = rotation_matrix[None,...]
-        
-    # Concat R and t
-    if translation_vector is None:
-        if rotation_matrix.shape[0] == 1:
-            translation_vector = np.zeros((1,3))
-        else:
-            translation_vector = np.zeros((rotation_matrix.shape[0],1,3))
+        H = np.eye(4)
+        H[:3,:3] = rotation_matrix
+        if translation_vector is not None:
+            H[:3,3] = translation_vector
+        return H 
+      
     else:
-        if len(translation_vector.shape) == 1:
-              translation_vector = translation_vector[...,None]
-    H1  = np.concatenate((rotation_matrix, translation_vector[...,None]),axis=-1)
-    # Put in 4x4 HTM Format
-    H1  = np.concatenate((H1,np.zeros((H1.shape[0],1,4))),axis=1)
-    H1[:,3,3] += 1
-    
-    return H1
+        H = np.zeros((rotation_matrix.shape[0],4,4))
+        H[:,3,3] = 1.
+        H[:,:3,:3] = rotation_matrix
+        if translation_vector is not None:
+            H[:,:3,3] = translation_vector
+        return H
     
