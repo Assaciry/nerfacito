@@ -28,7 +28,26 @@ class Sphere():
         density[cond] = self.density
         
         return color,density
+
+
+class Voxels(nn.Module):
     
+    def __init__(self, nb_voxels=100, scale=1, device="cpu") -> None:
+        super(Voxels, self).__init__()
+        
+        self.nb_voxels = nb_voxels
+        self.scale = scale
+        self.device = device
+        
+    def forward(self, xyz):
+        x = xyz[:,0]
+        y = xyz[:,1]
+        z = xyz[:,2]
+        
+        cond = ()
+        
+        
+        
 
 def initialize_rays(H,W, device="cpu"):
     f = 1200
