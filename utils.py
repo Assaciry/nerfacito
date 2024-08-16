@@ -28,25 +28,6 @@ class Sphere():
         density[cond] = self.density
         
         return color,density
-
-
-class Voxels(nn.Module):
-    
-    def __init__(self, nb_voxels=100, scale=1, device="cpu") -> None:
-        super(Voxels, self).__init__()
-        
-        self.nb_voxels = nb_voxels
-        self.scale = scale
-        self.device = device
-        
-    def forward(self, xyz):
-        x = xyz[:,0]
-        y = xyz[:,1]
-        z = xyz[:,2]
-        
-        cond = ()
-        
-        
         
 
 def initialize_rays(H,W,fx, fy, device="cpu"):
@@ -77,8 +58,10 @@ def apply_camera_transformation(rays_o, rays_d, cam2world):
 
 def accumulated_transmittance(b):
     acc = torch.cumprod(b, 1)
-    acc[:, 0] = 1.
-    return acc
+    return torch.cat((
+                torch.ones(acc.shape[0],1, device=acc.device),
+                acc[:,:-1]
+            ),dim=1)
 
 def rendering(models, rays_o, rays_d, tn = 0.2, tf = 1.8, nb_bins = 100, device="cpu"):
     t  = torch.linspace(tn, tf, nb_bins, device=device)
@@ -106,26 +89,6 @@ def rendering(models, rays_o, rays_d, tn = 0.2, tf = 1.8, nb_bins = 100, device=
 def euler_to_rotation_matrix(ypr):
     R_ned = Rotation.from_euler("ZYX", ypr, degrees=True)
     return R_ned.as_matrix()
-
-# def create_homogeneous_matrix(rotation_matrix, translation_vector=None):
-#     if len(rotation_matrix.shape) == 2:
-#         rotation_matrix = rotation_matrix[None,...]
-        
-#     # Concat R and t
-#     if translation_vector is None:
-#         if rotation_matrix.shape[0] == 1:
-#             translation_vector = np.zeros((1,3))
-#         else:
-#             translation_vector = np.zeros((rotation_matrix.shape[0],1,3))
-#     else:
-#         if len(translation_vector.shape) == 1:
-#               translation_vector = translation_vector[...,None]
-#     H1  = np.concatenate((rotation_matrix, translation_vector[...,None]),axis=-1)
-#     # Put in 4x4 HTM Format
-#     H1  = np.concatenate((H1,np.zeros((H1.shape[0],1,4))),axis=1)
-#     H1[:,3,3] += 1
-    
-#     return H1
     
 def create_homogeneous_matrix(rotation_matrix, translation_vector=None):
     if len(rotation_matrix.shape) == 2:
