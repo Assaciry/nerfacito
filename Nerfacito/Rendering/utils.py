@@ -58,9 +58,9 @@ def rendering(models, rays_o, rays_d, tn = 0.2, tf = 1.8, nb_bins = 100, device=
     densities = densities.reshape(-1, nb_bins)
     
     alpha = 1 - torch.exp(- densities * dt.unsqueeze(0))
-    T = accumulated_transmittance(1-alpha)
-    img = (T.unsqueeze(-1) * colors * alpha.unsqueeze(-1)).sum(1)
-    return img
+    weights = accumulated_transmittance(1-alpha) * alpha # T(r) * sigma(r)
+    img = (weights.unsqueeze(-1) * colors).sum(1)
+    return img, alpha
 
 def euler_to_rotation_matrix(ypr):
     R_ned = Rotation.from_euler("ZYX", ypr, degrees=True)
