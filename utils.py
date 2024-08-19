@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from scipy.spatial.transform import Rotation
+import imageio
+from pathlib import Path,PosixPath 
 
 class Sphere():
     def __init__(self, center = (0,0,0), radius = 1, color = (1,0,0), density = 10, device = "cpu") -> None:
@@ -106,3 +108,56 @@ def create_homogeneous_matrix(rotation_matrix, translation_vector=None):
             H[:,:3,3] = translation_vector
         return H
     
+
+def get_rays(DIR : PosixPath, image_downscale_factor = 2, max_num_images=None, random_sample=False):
+    ### Find json file and image folders
+    json_path = Path.joinpath(DIR, "transforms.json")
+    images_path = Path.joinpath(DIR, f"images_{image_downscale_factor}")
+    
+    assert os.path.isfile(json_path), f"transforms.json does not exists in directory {DIR}"
+    assert os.path.isdir(images_path), f"There are no images_{image_downscale_factor} folders in directory {DIR}"
+    
+    ### Read json file and images
+    with open(json_path, "r") as jfile:
+        json_file_contents =  json.load(jfile)
+    
+    image_paths = [os.path.join(images_path, i) for i in os.listdir(images_path)]
+    assert len(json_file_contents["frames"]) == len(image_paths), "Number of camera poses must match the number of images"
+    
+    framenames_transforms = [(json_file_contents["frames"][i]["file_path"],json_file_contents["frames"][i]["transform_matrix"]) for i in range(len(json_file_contents["frames"]))]
+    
+    get_image = lambda fname:  image_paths[image_paths.index(os.path.join(DIR.as_posix(),f"images_{image_downscale_factor}",fname.split("/")[-1]))]
+    fname_poseimagepath = [(pose,get_image(fname)) for fname,pose in framenames_transforms]
+    
+    if random_sample:
+        assert max_num_images is not None, "In random subsampling, max_num_images must be an int."
+        fname_poseimagepath = random.sample(fname_poseimagepath, max_num_images)
+    
+    frames,poses = [],[]
+    for pose,imagepath in fname_poseimagepath:
+        frame = imageio.imread(imagepath) / 255. # To map to [0,1]
+        pose  = np.array(pose)
+        pose  = np.linalg.inv(pose)
+        frames.append(frame)
+        poses.append(pose)       
+        
+    frames,poses = np.array(frames),np.array(poses)
+    
+    # RGBA -> RGB
+    if frames.shape[3] == 4: 
+        frames = frames[...:3] * frames[...:-1:] + (1 - frames[...:-1:])
+    
+    N = len(frames)
+
+    H,W = frames[0].shape[0], frames[0].shape[1]
+    rays_o_t, rays_d_t = torch.zeros((N,W*H,3)), torch.zeros((N,W*H,3))
+    ground_truths = torch.Tensor(frames.reshape(N,H*W,3))
+    for i in range(N): # TODO: Apply intrinsic transformations when scaled images are used! 
+        c2w = torch.Tensor(poses[i])
+        fx,fy = json_file_contents["fl_x"], json_file_contents["fl_y"]         
+        rays_o, rays_d = initialize_rays(H,W,fx,fy, device="cpu")  
+        rays_o, rays_d = apply_camera_transformation(rays_o, rays_d, c2w)
+        rays_o_t[i] = rays_o
+        rays_d_t[i] = rays_d
+        
+    return rays_o_t, rays_d_t,ground_truths,(H,W)
