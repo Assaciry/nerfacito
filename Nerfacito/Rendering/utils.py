@@ -40,6 +40,23 @@ def accumulated_transmittance(b):
             ),dim=1)
 
 def rendering(models, rays_o, rays_d, tn = 0.2, tf = 1.8, nb_bins = 100, device="cpu"):
+    """
+    Given array of models along with ray origins and ray directions, computes volumetric rendering
+    and returns the color and depth
+    
+    @Args:
+    - model: List of models with _intersect()_ method.
+    - rays_o : Tensor of ray origins (W*H,3)
+    - rays_d : Tensor of ray directions (W*H,3)
+    - tn     : Near plane distance
+    - tf     : Far plane distance
+    - nb_bins : Nuber of bins along ray direction
+    - device  : cpu or cuda
+        
+    @Returns:
+    - colors: Colors computed from volumetric rendering (H*W,3)
+    - depths: Depths computed from alpha (H*W,)
+    """
     t  = torch.linspace(tn, tf, nb_bins, device=device)
     dt = torch.cat((t[1:] - t[:-1], torch.Tensor([1e10]).to(device)))
     
@@ -60,7 +77,7 @@ def rendering(models, rays_o, rays_d, tn = 0.2, tf = 1.8, nb_bins = 100, device=
     alpha = 1 - torch.exp(- densities * dt.unsqueeze(0))
     weights = accumulated_transmittance(1-alpha) * alpha # T(r) * sigma(r)
     img = (weights.unsqueeze(-1) * colors).sum(1)
-    return img, alpha
+    return img, alpha.sum(1)
 
 def euler_to_rotation_matrix(ypr):
     R_ned = Rotation.from_euler("ZYX", ypr, degrees=True)
